@@ -59,6 +59,8 @@ pub struct WorkspaceSelection<'a> {
     pub from: &'a [WorkspaceGlob],
     /// Select the workspaces changed since a ref, or since the base refs when `Some(None)` (`--since`)
     pub since: &'a Option<Option<String>>,
+    /// Compare `--since` against this ref rather than the working tree (`--head`)
+    pub head: &'a Option<String>,
     /// Follow dependencies, or dependents when combined with `--since` (`--recursive`)
     pub recursive: bool,
     /// Add the transitive dependencies of the selected workspaces (`--follow-dependencies`)
@@ -116,10 +118,13 @@ impl<'a> WorkspaceSelection<'a> {
         }
 
         if let Some(since) = self.since {
-            let changed_workspaces
-                = git_utils::fetch_changed_workspaces(project, since.as_deref()).await?;
+            let range
+                = git_utils::ChangesetRange {
+                    base: since.clone(),
+                    head: self.head.clone(),
+                }.with_env_defaults();
 
-            seeds.extend(changed_workspaces.into_keys());
+            seeds.extend(git_utils::fetch_changed_workspaces_in_range(project, &range).await?);
         }
 
         if !self.has_explicit_seeds() {
