@@ -6,9 +6,14 @@ use crate::daemon::coordinator_state::TaskGraph;
 /// Find tasks that are ready to execute.
 /// A task is ready when all its prerequisites are completed (in the same context).
 /// For long-lived prerequisites, being "warmed up" counts as ready for dependents.
+///
+/// At most `task_concurrency` processes run at once, across all contexts.
+/// Long-lived tasks, script-less tasks, and tasks blocked on a nested run
+/// (see `TaskGraph::context_callers`) don't count toward the limit.
 pub fn find_ready_tasks(
     graph: &TaskGraph,
     running: &HashSet<ContextualTaskId>,
+    task_concurrency: usize,
 ) -> Vec<ContextualTaskId> {
     // Collect all contexts that have pending work
     let active_contexts: HashSet<&String> = graph
@@ -18,16 +23,27 @@ pub fn find_ready_tasks(
         .map(|ctx_id| &ctx_id.context_id)
         .collect();
 
+    let blocked_callers: HashSet<&ContextualTaskId>
+        = graph.context_callers.values().collect();
+
+    let running_count
+        = running.iter()
+            .filter(|id| !graph.is_long_lived(id) && !blocked_callers.contains(id))
+            .count();
+
+    let mut available_slots
+        = task_concurrency.max(1).saturating_sub(running_count);
+
     let mut ready = Vec::new();
 
     // For each context, check which tasks are ready
     for context_id in active_contexts {
-        for (task_id, prerequisites) in &graph.resolved.tasks {
-            let ctx_task_id = ContextualTaskId::new(task_id.clone(), context_id.clone());
-
-            if !graph.prepared.contains_key(&ctx_task_id) {
+        for ctx_task_id in graph.prepared.keys().filter(|id| &id.context_id == context_id) {
+            let Some(prerequisites) = graph.prerequisites_of(&ctx_task_id.task_id, context_id) else {
                 continue;
-            }
+            };
+
+            let ctx_task_id = ctx_task_id.clone();
 
             // Skip if already completed, failed, finished, or running
             let task_state = graph.get_state(&ctx_task_id);
@@ -65,9 +81,23 @@ pub fn find_ready_tasks(
                 false
             });
 
-            if all_prereqs_ready {
-                ready.push(ctx_task_id);
+            if !all_prereqs_ready {
+                continue;
             }
+
+            let takes_slot
+                = graph.prepared.get(&ctx_task_id)
+                    .map_or(false, |prepared| !prepared.script.is_empty() && !prepared.is_long_lived);
+
+            if takes_slot {
+                if available_slots == 0 {
+                    continue;
+                }
+
+                available_slots -= 1;
+            }
+
+            ready.push(ctx_task_id);
         }
     }
 
@@ -91,12 +121,12 @@ pub fn find_tasks_to_fail(
 
     // For each context, check which tasks should fail
     for context_id in active_contexts {
-        for (task_id, prerequisites) in &graph.resolved.tasks {
-            let ctx_task_id = ContextualTaskId::new(task_id.clone(), context_id.clone());
-
-            if !graph.prepared.contains_key(&ctx_task_id) {
+        for ctx_task_id in graph.prepared.keys().filter(|id| &id.context_id == context_id) {
+            let Some(prerequisites) = graph.prerequisites_of(&ctx_task_id.task_id, context_id) else {
                 continue;
-            }
+            };
+
+            let ctx_task_id = ctx_task_id.clone();
 
             // Skip if already completed, failed, script finished (e.g. waiting for subtasks), or running
             let task_state = graph.get_state(&ctx_task_id);
