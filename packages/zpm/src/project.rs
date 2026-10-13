@@ -2,7 +2,7 @@ use std::{collections::{BTreeMap, BTreeSet, HashSet}, io::ErrorKind, sync::{Arc,
 
 use colored::Colorize;
 use globset::{GlobBuilder, GlobSetBuilder};
-use zpm_config::{Configuration, ConfigurationContext, IslandLinker, Source};
+use zpm_config::{Configuration, ConfigurationContext, IslandLinker, Settings, Source};
 use zpm_macro_enum::zpm_enum;
 use zpm_parsers::JsonDocument;
 use zpm_primitives::{Descriptor, Ident, Locator, Range, Reference, WorkspaceIdentReference, WorkspaceMagicRange, WorkspacePathReference};
@@ -1098,7 +1098,22 @@ impl Project {
         // in ways the other freshness checks can't see.
         writer.update(get_bin_version().as_bytes());
 
-        writer.update(serde_json::to_vec(&self.config.settings)
+        let mut settings
+            = serde_json::to_value(&self.config.settings)
+                .expect("configuration settings should always be serializable");
+
+        // Settings marked with `"affectsInstall": false` in the schema only
+        // validate an install or shape the output, so they can't change
+        // what gets installed. Hashing them would make every `--immutable`
+        // install (which forces enableImmutableInstalls) invalidate the
+        // next lazy install.
+        if let Some(settings) = settings.as_object_mut() {
+            for key in Settings::install_insensitive_setting_names() {
+                settings.remove(*key);
+            }
+        }
+
+        writer.update(serde_json::to_vec(&settings)
             .expect("configuration settings should always be serializable"));
 
         writer.finalize()
