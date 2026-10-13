@@ -6792,7 +6792,9 @@
           "@yarnpkg/node-linux-x64@builtin:24.12.0",
           "@yarnpkg/node-linux-arm64@builtin:24.12.0",
           "@yarnpkg/node-darwin-x64@builtin:24.12.0",
-          "@yarnpkg/node-darwin-arm64@builtin:24.12.0"
+          "@yarnpkg/node-darwin-arm64@builtin:24.12.0",
+          "@yarnpkg/node-win-x64@builtin:24.12.0",
+          "@yarnpkg/node-win-arm64@builtin:24.12.0"
         ]
       }
     },
@@ -6852,6 +6854,36 @@
           ],
           "os": [
             "linux"
+          ]
+        }
+      }
+    },
+    "@yarnpkg/node-win-arm64@builtin:24.12.0": {
+      "checksum": null,
+      "resolution": {
+        "resolution": "@yarnpkg/node-win-arm64@builtin:24.12.0",
+        "version": "24.12.0",
+        "requirements": {
+          "cpu": [
+            "arm64"
+          ],
+          "os": [
+            "win32"
+          ]
+        }
+      }
+    },
+    "@yarnpkg/node-win-x64@builtin:24.12.0": {
+      "checksum": null,
+      "resolution": {
+        "resolution": "@yarnpkg/node-win-x64@builtin:24.12.0",
+        "version": "24.12.0",
+        "requirements": {
+          "cpu": [
+            "x64"
+          ],
+          "os": [
+            "win32"
           ]
         }
       }

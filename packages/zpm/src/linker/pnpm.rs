@@ -32,6 +32,7 @@ impl LinkTrees {
             = SyncTree::new();
 
         store_tree.dry_run = false;
+        store_tree.link_type = project.config.settings.win_link_type.value.into();
 
         // Store dot-entries (.modules.yaml, ...) aren't ours to remove;
         // neither is pnpm's own lockfile.
@@ -53,6 +54,7 @@ impl LinkTrees {
                 = SyncTree::new();
 
             workspace_nm_tree.dry_run = false;
+            workspace_nm_tree.link_type = project.config.settings.win_link_type.value.into();
             workspace_nm_tree.set_root_preserve_extra(PreserveExtra::Dots)?;
             workspace_nm_tree.register_entry(Path::from_str(".bin")?, SyncItem::Missing)?;
 
